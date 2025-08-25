@@ -9,27 +9,36 @@ UPDATE_PACKAGE() {
 	local PKG_LIST=("$PKG_NAME" $5)  # 第5个参数为自定义名称列表
 	local REPO_NAME=${PKG_REPO#*/}
 
-	echo " "
+		echo " "
 
-	# 删除本地可能存在的不同名称的软件包
 	for NAME in "${PKG_LIST[@]}"; do
 		# 查找匹配的目录
 		echo "Search directory: $NAME"
 		local FOUND_DIRS=$(find ../feeds/luci/ ../feeds/packages/ -maxdepth 3 -type d -iname "*$NAME*" 2>/dev/null)
 
-		# 删除找到的目录
 		if [ -n "$FOUND_DIRS" ]; then
+			# 如果已经存在，尝试 git pull 更新
 			while read -r DIR; do
-				rm -rf "$DIR"
-				echo "Delete directory: $DIR"
+				if [ -d "$DIR/.git" ]; then
+					echo "Directory exists, pulling latest: $DIR"
+					git -C "$DIR" reset --hard
+					git -C "$DIR" pull
+				else
+					# 非 git 仓库，先删除再克隆
+					rm -rf "$DIR"
+					echo "Non-git directory removed: $DIR"
+				fi
 			done <<< "$FOUND_DIRS"
 		else
-			echo "Not fonud directory: $NAME"
+			echo "Directory not found: $NAME"
 		fi
 	done
 
-	# 克隆 GitHub 仓库
-	git clone --depth=1 --single-branch --branch $PKG_BRANCH "https://github.com/$PKG_REPO.git"
+	# 如果主目录不存在就克隆
+	if [ ! -d "./$REPO_NAME" ]; then
+		git clone --depth=1 --single-branch --branch $PKG_BRANCH "https://github.com/$PKG_REPO.git"
+	fi
+
 
 	# 处理克隆的仓库
 	if [[ "$PKG_SPECIAL" == "pkg" ]]; then
